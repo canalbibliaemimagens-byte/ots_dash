@@ -204,8 +204,8 @@ function ModelForm({
             path: item.name,
             size: item.metadata?.size || 0,
           });
-        } else if (item.id === null || !item.metadata) {
-          // Folder (Supabase Storage: folders have id=null and no metadata)
+        } else {
+          // Folder (or file without extension). Treat as folder candidate to scan.
           folders.push(item.name);
         }
       }
