@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oracle Trader v3 — Arquitetura</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #2a3450;
+    --text: #e0e7f1;
+    --text-dim: #6b7a94;
+    --accent-hub: #f59e0b;
+    --accent-pred: #8b5cf6;
+    --accent-exec: #10b981;
+    --accent-mt5: #3b82f6;
+    --accent-ct: #ef4444;
+    --accent-dash: #ec4899;
+    --glow-hub: rgba(245,158,11,0.15);
+    --glow-pred: rgba(139,92,246,0.15);
+    --glow-exec: rgba(16,185,129,0.15);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    background: linear-gradient(135deg, var(--accent-hub), var(--accent-pred));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-bottom: 32px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Architecture Grid */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  /* Hub - Center piece */
+  .hub-section {
+    background: var(--surface);
+    border: 1px solid var(--accent-hub);
+    border-radius: 12px;
+    padding: 24px;
+    position: relative;
+    box-shadow: 0 0 40px var(--glow-hub);
+  }
+
+  .hub-section::before {
+    content: 'BARRAMENTO CENTRAL';
+    position: absolute;
+    top: -10px;
+    left: 24px;
+    background: var(--bg);
+    padding: 0 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-hub);
+    letter-spacing: 2px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .hub-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent-hub);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .channels {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .channel {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+  }
+
+  .channel:hover, .channel.active {
+    border-color: var(--accent-hub);
+    background: rgba(245,158,11,0.1);
+    color: var(--accent-hub);
+  }
+
+  .channel.active {
+    box-shadow: 0 0 12px rgba(245,158,11,0.2);
+  }
+
+  /* Process Cards */
+  .processes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .process-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    transition: all 0.3s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .process-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+  }
+
+  .process-card[data-role="preditor"]::after { background: var(--accent-pred); }
+  .process-card[data-role="executor"]::after { background: var(--accent-exec); }
+  .process-card[data-role="mt5"]::after { background: var(--accent-mt5); }
+  .process-card[data-role="ctrader"]::after { background: var(--accent-ct); }
+
+  .process-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--text-dim);
+  }
+
+  .process-card.expanded {
+    grid-column: 1 / -1;
+  }
+
+  .process-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .process-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .process-card[data-role="preditor"] .process-icon {
+    background: rgba(139,92,246,0.15);
+    color: var(--accent-pred);
+  }
+  .process-card[data-role="executor"] .process-icon {
+    background: rgba(16,185,129,0.15);
+    color: var(--accent-exec);
+  }
+  .process-card[data-role="mt5"] .process-icon {
+    background: rgba(59,130,246,0.15);
+    color: var(--accent-mt5);
+  }
+  .process-card[data-role="ctrader"] .process-icon {
+    background: rgba(239,68,68,0.15);
+    color: var(--accent-ct);
+  }
+
+  .process-name {
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  .process-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .process-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .feature-tag {
+    background: var(--surface2);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+  }
+
+  .process-io {
+    margin-top: 14px;
+    display: none;
+  }
+
+  .process-card.expanded .process-io {
+    display: block;
+  }
+
+  .io-section {
+    margin-bottom: 10px;
+  }
+
+  .io-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .io-item {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 0;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .io-item .arrow-in { color: var(--accent-exec); }
+  .io-item .arrow-out { color: var(--accent-hub); }
+
+  /* Flow Diagram */
+  .flow-section {
+    margin-top: 32px;
+  }
+
+  .flow-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text-dim);
+  }
+
+  .flow-steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow-x: auto;
+    padding: 16px 0;
+  }
+
+  .flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 100px;
+    opacity: 0.4;
+    transition: opacity 0.5s;
+  }
+
+  .flow-step.active {
+    opacity: 1;
+  }
+
+  .flow-dot {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    border: 2px solid;
+    transition: all 0.3s;
+  }
+
+  .flow-step.active .flow-dot {
+    box-shadow: 0 0 20px rgba(255,255,255,0.1);
+  }
+
+  .flow-arrow {
+    width: 30px;
+    height: 2px;
+    background: var(--border);
+    position: relative;
+    transition: background 0.5s;
+  }
+
+  .flow-arrow.active {
+    background: var(--accent-hub);
+  }
+
+  .flow-arrow::after {
+    content: '›';
+    position: absolute;
+    right: -4px;
+    top: -9px;
+    font-size: 16px;
+    color: inherit;
+  }
+
+  .flow-label {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+    color: var(--text-dim);
+  }
+
+  .flow-msg {
+    font-size: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent-hub);
+    min-height: 14px;
+  }
+
+  /* Animation controls */
+  .flow-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: center;
+  }
+
+  .flow-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .flow-btn:hover {
+    border-color: var(--accent-hub);
+    color: var(--accent-hub);
+  }
+
+  /* Phase timeline */
+  .phases {
+    margin-top: 32px;
+  }
+
+  .phase {
+    display: flex;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .phase-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+    border: 2px solid var(--accent-hub);
+    color: var(--accent-hub);
+  }
+
+  .phase-content {
+    flex: 1;
+  }
+
+  .phase-name {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+
+  .phase-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Oracle Trader v3</h1>
+  <p class="subtitle">Hub-Centric Architecture • 4 Processos • WebSocket</p>
+
+  <!-- Hub -->
+  <div class="hub-section">
+    <div class="hub-title">⬡ OTS Hub</div>
+    <div class="channels" id="channels">
+      <div class="channel" data-ch="market" onclick="toggleChannel(this)">📊 market</div>
+      <div class="channel" data-ch="signals" onclick="toggleChannel(this)">🎯 signals</div>
+      <div class="channel" data-ch="commands" onclick="toggleChannel(this)">⚡ commands</div>
+      <div class="channel" data-ch="execution" onclick="toggleChannel(this)">✅ execution</div>
+      <div class="channel" data-ch="telemetry" onclick="toggleChannel(this)">📡 telemetry</div>
+      <div class="channel" data-ch="control" onclick="toggleChannel(this)">🎛️ control</div>
+    </div>
+
+    <!-- Processes -->
+    <div class="processes">
+      <!-- Preditor -->
+      <div class="process-card" data-role="preditor" onclick="toggleCard(this)">
+        <div class="process-header">
+          <div class="process-icon">P</div>
+          <div>
+            <div class="process-name">Preditor</div>
+            <div class="process-sub">processo independente</div>
+          </div>
+        </div>
+        <div class="process-features">
+          <span class="feature-tag">HMM</span>
+          <span class="feature-tag">PPO</span>
+          <span class="feature-tag">VirtualPos</span>
+          <span class="feature-tag">Features</span>
+          <span class="feature-tag">Warmup</span>
+        </div>
+        <div class="process-io">
+          <div class="io-section">
+            <div class="io-label">RECEBE (subscribe)</div>
+            <div class="io-item"><span class="arrow-in">←</span> market/bar — nova barra OHLCV</div>
+            <div class="io-item"><span class="arrow-in">←</span> control/load_model — carregar ZIP</div>
+          </div>
+          <div class="io-section">
+            <div class="io-label">PUBLICA (publish)</div>
+            <div class="io-item"><span class="arrow-out">→</span> signals/signal — ação + HMM + VPnL</div>
+            <div class="io-item"><span class="arrow-out">→</span> telemetry — estado virtual</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Executor -->
+      <div class="process-card" data-role="executor" onclick="toggleCard(this)">
+        <div class="process-header">
+          <div class="process-icon">E</div>
+          <div>
+            <div class="process-name">Executor</div>
+            <div class="process-sub">processo independente</div>
+          </div>
+        </div>
+        <div class="process-features">
+          <span class="feature-tag">RiskGuard</span>
+          <span class="feature-tag">SL/TP</span>
+          <span class="feature-tag">LotMapper</span>
+          <span class="feature-tag">SyncLogic</span>
+        </div>
+        <div class="process-io">
+          <div class="io-section">
+            <div class="io-label">RECEBE (subscribe)</div>
+            <div class="io-item"><span class="arrow-in">←</span> signals/signal — do Preditor</div>
+            <div class="io-item"><span class="arrow-in">←</span> execution/order_result — do Connector</div>
+            <div class="io-item"><span class="arrow-in">←</span> execution/position_closed — SL/TP hit</div>
+            <div class="io-item"><span class="arrow-in">←</span> market/account — info da conta</div>
+          </div>
+          <div class="io-section">
+            <div class="io-label">PUBLICA (publish)</div>
+            <div class="io-item"><span class="arrow-out">→</span> commands/open_order</div>
+            <div class="io-item"><span class="arrow-out">→</span> commands/close_order</div>
+            <div class="io-item"><span class="arrow-out">→</span> commands/modify_order</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MT5 Connector -->
+      <div class="process-card" data-role="mt5" onclick="toggleCard(this)">
+        <div class="process-header">
+          <div class="process-icon">M</div>
+          <div>
+            <div class="process-name">Connector MT5</div>
+            <div class="process-sub">windows • polling</div>
+          </div>
+        </div>
+        <div class="process-features">
+          <span class="feature-tag">mt5.order_send()</span>
+          <span class="feature-tag">Polling 5s</span>
+          <span class="feature-tag">SL/TP detect</span>
+        </div>
+        <div class="process-io">
+          <div class="io-section">
+            <div class="io-label">RECEBE (subscribe)</div>
+            <div class="io-item"><span class="arrow-in">←</span> commands/* — ordens do Executor</div>
+          </div>
+          <div class="io-section">
+            <div class="io-label">PUBLICA (publish)</div>
+            <div class="io-item"><span class="arrow-out">→</span> market/bar — nova barra</div>
+            <div class="io-item"><span class="arrow-out">→</span> market/account — info conta</div>
+            <div class="io-item"><span class="arrow-out">→</span> execution/order_result</div>
+            <div class="io-item"><span class="arrow-out">→</span> execution/position_closed</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- cTrader Connector -->
+      <div class="process-card" data-role="ctrader" onclick="toggleCard(this)">
+        <div class="process-header">
+          <div class="process-icon">C</div>
+          <div>
+            <div class="process-name">Connector cTrader</div>
+            <div class="process-sub">protobuf/raw • event-driven</div>
+          </div>
+        </div>
+        <div class="process-features">
+          <span class="feature-tag">ProtoOA*</span>
+          <span class="feature-tag">SSL/Twisted</span>
+          <span class="feature-tag">SpotEvent</span>
+          <span class="feature-tag">ExecutionEvent</span>
+        </div>
+        <div class="process-io">
+          <div class="io-section">
+            <div class="io-label">RECEBE (subscribe)</div>
+            <div class="io-item"><span class="arrow-in">←</span> commands/* — ordens do Executor</div>
+          </div>
+          <div class="io-section">
+            <div class="io-label">PUBLICA (publish)</div>
+            <div class="io-item"><span class="arrow-out">→</span> market/bar — via BarDetector</div>
+            <div class="io-item"><span class="arrow-out">→</span> market/account — calculado local</div>
+            <div class="io-item"><span class="arrow-out">→</span> execution/order_result</div>
+            <div class="io-item"><span class="arrow-out">→</span> execution/position_closed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flow Animation -->
+  <div class="flow-section">
+    <div class="flow-title">Fluxo: Nova Barra → Ordem Executada</div>
+    <div class="flow-steps" id="flowSteps">
+      <div class="flow-step" data-step="0">
+        <div class="flow-dot" style="border-color:var(--accent-mt5);color:var(--accent-mt5)">M</div>
+        <div class="flow-label">Connector<br>detecta bar</div>
+        <div class="flow-msg" id="msg0"></div>
+      </div>
+      <div class="flow-arrow" data-step="1"></div>
+      <div class="flow-step" data-step="1">
+        <div class="flow-dot" style="border-color:var(--accent-hub);color:var(--accent-hub)">⬡</div>
+        <div class="flow-label">Hub<br>roteia</div>
+        <div class="flow-msg" id="msg1"></div>
+      </div>
+      <div class="flow-arrow" data-step="2"></div>
+      <div class="flow-step" data-step="2">
+        <div class="flow-dot" style="border-color:var(--accent-pred);color:var(--accent-pred)">P</div>
+        <div class="flow-label">Preditor<br>HMM+PPO</div>
+        <div class="flow-msg" id="msg2"></div>
+      </div>
+      <div class="flow-arrow" data-step="3"></div>
+      <div class="flow-step" data-step="3">
+        <div class="flow-dot" style="border-color:var(--accent-hub);color:var(--accent-hub)">⬡</div>
+        <div class="flow-label">Hub<br>roteia</div>
+        <div class="flow-msg" id="msg3"></div>
+      </div>
+      <div class="flow-arrow" data-step="4"></div>
+      <div class="flow-step" data-step="4">
+        <div class="flow-dot" style="border-color:var(--accent-exec);color:var(--accent-exec)">E</div>
+        <div class="flow-label">Executor<br>RiskGuard</div>
+        <div class="flow-msg" id="msg4"></div>
+      </div>
+      <div class="flow-arrow" data-step="5"></div>
+      <div class="flow-step" data-step="5">
+        <div class="flow-dot" style="border-color:var(--accent-hub);color:var(--accent-hub)">⬡</div>
+        <div class="flow-label">Hub<br>roteia</div>
+        <div class="flow-msg" id="msg5"></div>
+      </div>
+      <div class="flow-arrow" data-step="6"></div>
+      <div class="flow-step" data-step="6">
+        <div class="flow-dot" style="border-color:var(--accent-mt5);color:var(--accent-mt5)">M</div>
+        <div class="flow-label">Connector<br>executa</div>
+        <div class="flow-msg" id="msg6"></div>
+      </div>
+    </div>
+    <div class="flow-controls">
+      <button class="flow-btn" onclick="animateFlow()">▶ Animar Fluxo</button>
+      <button class="flow-btn" onclick="resetFlow()">↺ Reset</button>
+    </div>
+  </div>
+
+  <!-- Phases -->
+  <div class="phases">
+    <div class="flow-title" style="margin-bottom:12px">Ordem de Implementação</div>
+    
+    <div class="phase">
+      <div class="phase-num">1</div>
+      <div class="phase-content">
+        <div class="phase-name">Hub + Protocolo WS</div>
+        <div class="phase-desc">server.py, ws_client.py, messages.py — base de comunicação</div>
+      </div>
+    </div>
+    
+    <div class="phase">
+      <div class="phase-num">2</div>
+      <div class="phase-content">
+        <div class="phase-name">Preditor como Processo</div>
+        <div class="phase-desc">Wrapper WS ao redor do código V2 existente (intacto)</div>
+      </div>
+    </div>
+    
+    <div class="phase">
+      <div class="phase-num">3</div>
+      <div class="phase-content">
+        <div class="phase-name">Executor como Processo</div>
+        <div class="phase-desc">RiskGuard + LotMapper + SyncLogic via WS (sem dep direta do Connector)</div>
+      </div>
+    </div>
+    
+    <div class="phase">
+      <div class="phase-num">4</div>
+      <div class="phase-content">
+        <div class="phase-name">Connector MT5</div>
+        <div class="phase-desc">Adaptação da V1 (MT5Trader) + polling + detecção SL/TP</div>
+      </div>
+    </div>
+    
+    <div class="phase">
+      <div class="phase-num">5</div>
+      <div class="phase-content">
+        <div class="phase-name">Connector cTrader</div>
+        <div class="phase-desc">V2 com fixes (margin, ExecutionEvent, clientMsgId) + wrapper WS</div>
+      </div>
+    </div>
+    
+    <div class="phase">
+      <div class="phase-num">6</div>
+      <div class="phase-content">
+        <div class="phase-name">Dashboard</div>
+        <div class="phase-desc">Subscriber do Hub, telemetria real-time, controles</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleCard(card) {
+    card.classList.toggle('expanded');
+  }
+
+  function toggleChannel(el) {
+    el.classList.toggle('active');
+  }
+
+  const flowMsgs = [
+    'market/bar',
+    '[market] →',
+    'signal LONG_MOD',
+    '[signals] →',
+    'open_order 0.03',
+    '[commands] →',
+    'ticket: 12345'
+  ];
+
+  let flowTimer = null;
+
+  function animateFlow() {
+    resetFlow();
+    const steps = document.querySelectorAll('.flow-step');
+    const arrows = document.querySelectorAll('.flow-arrow');
+    let i = 0;
+
+    flowTimer = setInterval(() => {
+      if (i >= steps.length) {
+        clearInterval(flowTimer);
+        return;
+      }
+      steps[i].classList.add('active');
+      const msgEl = document.getElementById('msg' + i);
+      if (msgEl) msgEl.textContent = flowMsgs[i] || '';
+      if (i > 0) arrows[i-1].classList.add('active');
+      i++;
+    }, 600);
+  }
+
+  function resetFlow() {
+    if (flowTimer) clearInterval(flowTimer);
+    document.querySelectorAll('.flow-step').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.flow-arrow').forEach(a => a.classList.remove('active'));
+    for (let j = 0; j < 7; j++) {
+      const el = document.getElementById('msg' + j);
+      if (el) el.textContent = '';
+    }
+  }
+</script>
+
+</body>
+</html>
