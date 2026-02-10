@@ -32,7 +32,8 @@ import type { TradingModel } from "@/types/database";
 import { TRADING_MODELS_COLUMNS } from "@/lib/constants";
 
 interface BucketFile {
-  name: string;
+  name: string;       // display name (e.g., "EURUSD_M15/EURUSD_M15.zip")
+  path: string;       // full storage path for download
   size: number;
 }
 
@@ -183,24 +184,69 @@ function ModelForm({
     setLoadingBucket(true);
     try {
       const supabase = createClient();
-      const { data: files, error } = await supabase.storage
+
+      // 1) List root items (files + folders)
+      const { data: rootItems, error } = await supabase.storage
         .from(storageBucket)
-        .list("", { limit: 100, sortBy: { column: "name", order: "asc" } });
+        .list("", { limit: 200, sortBy: { column: "name", order: "asc" } });
 
       if (error) throw error;
 
-      const zips = (files || [])
-        .filter((f) => f.name.endsWith(".zip"))
-        .map((f) => ({
-          name: f.name,
-          size: f.metadata?.size || 0,
-        }));
+      const discovered: BucketFile[] = [];
 
-      setBucketFiles(zips);
+      // 2) Separate root ZIPs and folders
+      const folders: string[] = [];
+      for (const item of rootItems || []) {
+        if (item.name.endsWith(".zip")) {
+          // Root-level ZIP file
+          discovered.push({
+            name: item.name,
+            path: item.name,
+            size: item.metadata?.size || 0,
+          });
+        } else if (item.id === null || !item.metadata) {
+          // Folder (Supabase Storage: folders have id=null and no metadata)
+          folders.push(item.name);
+        }
+      }
 
-      if (zips.length === 0) {
+      // 3) For each folder, list contents and find ZIPs
+      //    Pattern: FOLDER/FOLDER.zip (from download_model.py)
+      const folderResults = await Promise.allSettled(
+        folders.map(async (folder) => {
+          const { data: contents, error: fErr } = await supabase.storage
+            .from(storageBucket)
+            .list(folder, { limit: 50, sortBy: { column: "name", order: "asc" } });
+
+          if (fErr || !contents) return [];
+
+          return contents
+            .filter((f) => f.name.endsWith(".zip"))
+            .map((f) => ({
+              name: `${folder}/${f.name}`,
+              path: `${folder}/${f.name}`,
+              size: f.metadata?.size || 0,
+            }));
+        })
+      );
+
+      for (const result of folderResults) {
+        if (result.status === "fulfilled") {
+          discovered.push(...result.value);
+        }
+      }
+
+      // Sort by name
+      discovered.sort((a, b) => a.name.localeCompare(b.name));
+      setBucketFiles(discovered);
+
+      if (discovered.length === 0) {
         toast.info("No ZIP files found in bucket", {
           description: `Bucket: ${storageBucket}`,
+        });
+      } else {
+        toast.success(`Found ${discovered.length} model(s)`, {
+          description: `${folders.length} folder(s) scanned`,
         });
       }
     } catch (e) {
@@ -363,7 +409,7 @@ function ModelForm({
           {/* File selector from bucket */}
           {bucketFiles.length > 0 ? (
             <div className="space-y-2">
-              <Label>Select Model ZIP</Label>
+              <Label>Select Model ZIP ({bucketFiles.length} found)</Label>
               <Select
                 value={storagePath}
                 onValueChange={(val) => {
@@ -380,7 +426,7 @@ function ModelForm({
                 </SelectTrigger>
                 <SelectContent>
                   {bucketFiles.map((f) => (
-                    <SelectItem key={f.name} value={f.name}>
+                    <SelectItem key={f.path} value={f.path}>
                       <span className="font-mono text-sm">{f.name}</span>
                       {f.size > 0 && (
                         <span className="text-xs text-foreground-dim ml-2">
@@ -398,7 +444,7 @@ function ModelForm({
               <Input
                 value={storagePath}
                 onChange={(e) => setStoragePath(e.target.value)}
-                placeholder="EURUSD_M15.zip"
+                placeholder="EURUSD_M15/EURUSD_M15.zip"
                 required
               />
             </div>
