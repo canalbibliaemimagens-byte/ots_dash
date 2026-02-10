@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -194,12 +195,11 @@ function ModelForm({
 
       const discovered: BucketFile[] = [];
 
-      console.log("Root items:", rootItems);
+      // 2) Separate root ZIPs and folders
 
       // 2) Separate root ZIPs and folders
       const folders: string[] = [];
       for (const item of rootItems || []) {
-        console.log("Processing item:", item);
         if (item.name.endsWith(".zip")) {
           // Root-level ZIP file
           discovered.push({
@@ -213,8 +213,6 @@ function ModelForm({
         }
       }
 
-      console.log("Identified folders:", folders);
-
       // 3) For each folder, list contents and find ZIPs
       //    Pattern: FOLDER/FOLDER.zip (from download_model.py)
       const folderResults = await Promise.allSettled(
@@ -223,16 +221,7 @@ function ModelForm({
             .from(storageBucket)
             .list(folder, { limit: 50, sortBy: { column: "name", order: "asc" } });
 
-          if (fErr) {
-            console.error(`Error listing folder ${folder}:`, fErr);
-            return [];
-          }
-          if (!contents) {
-            console.log(`No contents in folder ${folder}`);
-            return [];
-          }
-
-          console.log(`Contents of ${folder}:`, contents);
+          if (fErr || !contents) return [];
 
           return contents
             .filter((f) => f.name.endsWith(".zip"))
@@ -244,7 +233,7 @@ function ModelForm({
         })
       );
 
-      console.log("Folder results:", folderResults);
+
 
       for (const result of folderResults) {
         if (result.status === "fulfilled") {
@@ -254,7 +243,6 @@ function ModelForm({
 
       // Sort by name
       discovered.sort((a, b) => a.name.localeCompare(b.name));
-      console.log("Final discovered:", discovered);
       setBucketFiles(discovered);
 
       if (discovered.length === 0) {
@@ -393,9 +381,9 @@ function ModelForm({
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto bg-card">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Model" : "New Model"}</DialogTitle>
-          <div className="sr-only">
-            <p>Form to create or edit a trading model configuration.</p>
-          </div>
+          <DialogDescription className="sr-only">
+            Form to create or edit a trading model configuration.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
